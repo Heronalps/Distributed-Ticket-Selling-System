@@ -1,6 +1,0 @@
-NextDataCenterID=D3
-GlobalTicketNumber=10
-LamportClock=1
-DataCenterD0=127.0.0.1:50475
-DataCenterD1=127.0.0.1:50476
-

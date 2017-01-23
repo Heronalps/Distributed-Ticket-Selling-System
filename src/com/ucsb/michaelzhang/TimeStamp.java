@@ -15,7 +15,7 @@ public class TimeStamp implements Comparator<TimeStamp>, Comparable<TimeStamp>{
     }
 
     @Override
-    //In order to apply compareTo is class Request.
+    //In order to apply compareTo is class DataCenterRequest.
 
     public int compareTo(TimeStamp ts){
         if (this.lamportClock == ts.lamportClock) {
