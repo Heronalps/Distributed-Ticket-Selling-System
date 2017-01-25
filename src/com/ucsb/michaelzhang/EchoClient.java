@@ -30,9 +30,9 @@ public class EchoClient {
                                 new InputStreamReader(System.in))
         ) {
             String userInput;
-            while ((userInput = stdIn.readLine()) != null) {
-                out.println(userInput);
-                System.out.println("echo: " + in.readLine());
+            while ((userInput = stdIn.readLine()) != null) { //Read in User's input
+                out.println(userInput);//out.println() is for sending to Echo Server.
+                System.out.println("echo: " + in.readLine());//Print on the screen
             }
         } catch (UnknownHostException e) {
             System.err.println("Don't know about host " + hostName);

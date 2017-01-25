@@ -27,8 +27,8 @@ public class EchoServer {
                         new InputStreamReader(clientSocket.getInputStream()));
         ) {
             String inputLine;
-            while ((inputLine = in.readLine()) != null) {
-                out.println(inputLine);
+            while ((inputLine = in.readLine()) != null) { //Receiving input from Echo client
+                out.println(inputLine);// Send it back to Client
             }
         } catch (IOException e) {
             System.out.println("Exception caught when trying to listen on port "

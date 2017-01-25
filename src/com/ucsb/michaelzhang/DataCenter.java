@@ -16,10 +16,13 @@ import static com.ucsb.michaelzhang.Config.*;
  */
 public class DataCenter {
 
-    String dataCenterID;
+    String dataCenterID; //D0, D1, D2 ....
     int globalTicketNumber;
     String hostname;
     int port;
+    int requestTicketNum;
+
+
 
     // Lamport Clock. Basically it is a counter and the first component in TimeStamp <LamportClock, DataCenterID>
     int lamportClock;
@@ -47,9 +50,10 @@ public class DataCenter {
         String next = "D" + (Integer.valueOf(this.dataCenterID.substring(1,2)) + 1);
         changeProperty("Config", "NextDataCenterID", next);
         changeProperty("Config", "DataCenter" + this.dataCenterID + "_PORT", String.valueOf(this.port));
-        changeProperty("Config", "NextPort", String.valueOf(++this.port));
+        changeProperty("Config", "NextPort", String.valueOf(this.port + 1));
 
-        dataCenterRequestHeap = new PriorityQueue<>();
+
+        dataCenterRequestHeap = new PriorityQueue<>(10, new DataCenterRequest());
         clientRequestQueue = new LinkedList<>();
         replyToDataCenterArray = new ArrayList<>();
     }
@@ -60,63 +64,93 @@ public class DataCenter {
 
         DataCenter dataCenter = new DataCenter();
 
-        createSocketServer(dataCenter);
+        dataCenter.startSocketServer();
 
-        //TODO Assign a socket and IP address to new data center
         // For now, one datacenter can only serve one client. Will implement multiple clients if time permits.
+
 
     }
 
-    public static void createSocketServer (DataCenter dataCenter) throws IOException, ClassNotFoundException{
-        ServerSocket serverSocket = new ServerSocket(dataCenter.port);
+    public void startSocketServer() throws IOException, ClassNotFoundException{
+        ServerSocket serverSocket = new ServerSocket(this.port);
+        System.out.println("Socket Server Established at port " + this.port + " and Listening to Messages ...");
 
-        while(true) {
-            try (
-                    Socket clientSocket = serverSocket.accept();
-                    ObjectOutputStream outToClient =
-                            new ObjectOutputStream(clientSocket.getOutputStream());
-                    ObjectInputStream inFromClient =
-                            new ObjectInputStream(clientSocket.getInputStream());
-            ) {
-                System.out.println("Socket Server Established...");
+        while (true) {
+            try (Socket clientSocket = serverSocket.accept();
+                 ObjectInputStream inFromClient =
+                         new ObjectInputStream(clientSocket.getInputStream());
+                 ObjectOutputStream outToClient =
+                         new ObjectOutputStream(clientSocket.getOutputStream())
+            ){
+                System.out.println("A Message Received ...");
                 Message msg = (Message) inFromClient.readObject();
 
-                if (msg.type == "CLIENTREQUEST") {
 
+                if (msg.getType().equals("CLIENTREQUEST")) {
+                    System.out.println("A Client Request Received ... ");
                     ClientRequest clientRequest = (ClientRequest) msg;
-                    int requestTicketNum = clientRequest.numOfTicketRequest;
-                    int id = Integer.valueOf(dataCenter.dataCenterID.substring(1,2));
+                    requestTicketNum = clientRequest.numOfTicketRequest;
+                    int id = Integer.valueOf(dataCenterID.substring(1, 2));
 
-                    TimeStamp ts = new TimeStamp(dataCenter.lamportClock,id);
+                    TimeStamp ts = new TimeStamp(this.lamportClock, id);
                     DataCenterRequest dataCenterRequest =
-                            new DataCenterRequest(requestTicketNum, ts);
-
+                            new DataCenterRequest(requestTicketNum, ts, dataCenterID);
                     broadcastRequest(dataCenterRequest);
-                    dataCenter.dataCenterRequestHeap.add(dataCenterRequest);
-                    dataCenter.updateLamportClock();
+                    clientRequestQueue.add(clientRequest);
+                    dataCenterRequestHeap.add(dataCenterRequest);
+                    clockIncrement();
 
 
-                } else if (msg.type == "DATACENTERREQUEST") {
+                } else if (msg.getType().equals("DATACENTERREQUEST")) {
+                    System.out.println("A Data Center Request Received ... ");
                     DataCenterRequest dataCenterRequest = (DataCenterRequest) msg;
-                    dataCenter.dataCenterRequestHeap.add(dataCenterRequest);
+                    dataCenterRequestHeap.add(dataCenterRequest);
+                    setLocalClock(dataCenterRequest.timeStamp.lamportClock);
+                    clockIncrement();
+                    sendReply(dataCenterRequest.dataCenterID);
 
 
-                } else if (msg.type == "REPLYTODATACENTER") {
+                } else if (msg.getType().equals("REPLYTODATACENTER")) {
+                    System.out.println("A Reply to Data Center Received ... ");
                     ReplyToDataCenter replyToDataCenter = (ReplyToDataCenter) msg;
-                    dataCenter.replyToDataCenterArray.add(replyToDataCenter);
+                    replyToDataCenterArray.add(replyToDataCenter);
+                    clockIncrement();
+
+                    // If received all replies and the first request in the client request queue is also at top of the heap
+                    int totalNumOfDataCenter = Integer.parseInt(readConfig("Config", "TotalNumOfDataCenter"));
+
+                    if (replyToDataCenterArray.size() == (totalNumOfDataCenter - 1)
+                            && (dataCenterRequestHeap.peek().dataCenterID == this.dataCenterID)) {
+
+                        boolean success = sellTicket(requestTicketNum);
+                        replyClient(success, this.dataCenterID);
+
+                        // Clear Reply To Data Center array to avoid messing with following Replies
+                        replyToDataCenterArray.clear();
+                    }
 
 
-
-                } else if (msg.type == "RELEASE") {
+                } else if (msg.getType().equals("RELEASE")) {
+                    System.out.println("A Release Received ... ");
                     Release release = (Release) msg;
-                    dataCenter.globalTicketNumber -= release.numOfTicketDecreased;
+                    globalTicketNumber -= release.numOfTicketDecreased;
+                    if (!dataCenterRequestHeap.isEmpty()) {
+                        dataCenterRequestHeap.poll();
+                    }
+                    clockIncrement();
 
+                    // If received all replies and the first request in the client request queue is also at top of the heap
+                    int totalNumOfDataCenter = Integer.parseInt(readConfig("Config", "TotalNumOfDataCenter"));
 
+                    if (replyToDataCenterArray.size() == (totalNumOfDataCenter - 1)
+                            && (dataCenterRequestHeap.peek().dataCenterID == this.dataCenterID)) {
+
+                        boolean success = sellTicket(requestTicketNum);
+                        replyClient(success, this.dataCenterID);
+                        // Clear Reply To Data Center array to avoid messing with following Replies
+                        replyToDataCenterArray.clear();
+                    }
                 }
-                //Parse the client request
-                //Request ticket
-                //Answer client
-
             } catch (IOException ex) {
                 ex.printStackTrace();
             }
@@ -124,33 +158,107 @@ public class DataCenter {
     }
 
 
-    public void updateLamportClock(){
+    public synchronized void clockIncrement(){
         this.lamportClock++;
+        System.out.println("Lamport Clock increments ...");
     }
 
-    // Update Global ticket number in Config
-    public int updateGlobalTicketNumber(){
-        return 0;
+    public synchronized void setLocalClock(int messageTimeStamp){
+        this.lamportClock = Math.max(this.lamportClock, messageTimeStamp) + 1;
     }
 
     //Broadcast request to all existing data centers
-    public static void broadcastRequest(DataCenterRequest dataCenterRequest){
+    public void broadcastRequest(DataCenterRequest dataCenterRequest) throws IOException{
 
+        int totalNumOfDataCenter = Integer.parseInt(readConfig("Config","TotalNumOfDataCenter"));
+        String host = readConfig("Config", "Hostname");
+
+        for (int id = 0; totalNumOfDataCenter != 0; id++, totalNumOfDataCenter--){
+            try {
+                int port = Integer.parseInt(readConfig("Config", "DataCenterD" + id + "_PORT"));
+                if (port != this.port) {
+                    Socket socket = new Socket(host, port);
+                    ObjectOutputStream outToServer = new ObjectOutputStream(socket.getOutputStream());
+                    outToServer.writeObject(dataCenterRequest);
+                    System.out.println("Broadcasting Data Center Request to Data Center at port " + port + " ...");
+                }
+            } catch (IOException ex) {
+                ex.printStackTrace();
+            }
+        }
     }
 
-    public void sendReply(String dataCenterID){
+    //Send Reply to data center which sent requests
+    public void sendReply(String dataCenterID) throws IOException{
+        ReplyToDataCenter reply = new ReplyToDataCenter(this.dataCenterID);
+        try {
+            int port = Integer.parseInt(readConfig("Config", "DataCenter" + dataCenterID + "_PORT"));
+            String host = readConfig("Config", "Hostname");
+            Socket socket = new Socket(host, port);
+            ObjectOutputStream outToDataCenter = new ObjectOutputStream(socket.getOutputStream());
+            outToDataCenter.writeObject(reply);
+            System.out.println("Sent Reply to Data Center " + dataCenterID + " ...");
 
+        } catch (IOException ex) {
+            ex.printStackTrace();
+        }
     }
 
-    public void sendRelease(String dataCenterID, int numOfTicketDecreased){
 
+    //Access to Critical Section, which is the NumOfTicket in Config file
+    public boolean sellTicket(int numOfTicket) throws IOException {
+
+        int currentNum = Integer.parseInt(readConfig("Config", "GlobalTicketNumber"));
+        if (currentNum >= numOfTicket) {
+            changeProperty("Config", "GlobalTicketNumber", String.valueOf(currentNum - numOfTicket));
+            System.out.println(numOfTicket + " tickets have been sold ...");
+            broadcastRelease(numOfTicket);
+            return true;
+        } else {
+            //Once calling sellTicket, even failed to decrease the num of ticket, the data center should broadcast the Release anyway.
+            //If failed, broadcast release with 0 tickets.
+            System.out.println("Not sufficient tickets have been left ...");
+            broadcastRelease(0);
+            return false;
+        }
     }
 
-    public boolean sellTicket(int numOfTicket){
-        return true;
+    public void broadcastRelease(int numOfTicketDecreased) throws IOException{
+
+        Release release = new Release(numOfTicketDecreased);
+        int totalNumOfDataCenter = Integer.parseInt(readConfig("Config","TotalNumOfDataCenter"));
+        String host = readConfig("Config", "Hostname");
+        for (int id = 0; totalNumOfDataCenter != 0; id++, totalNumOfDataCenter--){
+            try {
+                int port = Integer.parseInt(readConfig("Config", "DataCenterD" + id + "_PORT"));
+                if (port != this.port) {
+                    Socket socket = new Socket(host, port);
+                    ObjectOutputStream outToServer = new ObjectOutputStream(socket.getOutputStream());
+                    outToServer.writeObject(release);
+                    System.out.println("Broadcasting Releases to other Data Centers ...");
+                }
+            } catch (IOException ex) {
+                ex.printStackTrace();
+            }
+        }
     }
 
-    public void replyClient(){
+    public void replyClient(boolean success, String dataCenterID) throws IOException{
+
+        try {
+            ReplyToClient reply = new ReplyToClient(success);
+            //Send reply to corresponding client. For now, I assume the ID of client and datacenter are same. May be modified later.
+            int port = Integer.parseInt(readConfig("Config", "ClientC" + dataCenterID.substring(1, 2) + "_PORT"));
+            String hostname = readConfig("Config", "Hostname");
+            Socket socket = new Socket(hostname, port);
+            ObjectOutputStream outToClient = new ObjectOutputStream(socket.getOutputStream());
+            outToClient.writeObject(reply);
+            outToClient.flush();
+            System.out.println("Replying to Client ...");
+
+        } catch (IOException ex){
+            ex.printStackTrace();
+        }
 
     }
 

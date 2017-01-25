@@ -1,13 +1,16 @@
 package com.ucsb.michaelzhang;
 
+import java.io.Serializable;
 import java.util.Comparator;
 
 /**
  * Created by michaelzhang on 1/21/17.
  */
-public class TimeStamp implements Comparator<TimeStamp>, Comparable<TimeStamp>{
+public class TimeStamp implements Comparator<TimeStamp>, Comparable<TimeStamp>, Serializable{
     int lamportClock;
     int processID;
+
+    //TimeStamp <1, D1> will be like <1, 1> for convenience. The second 1 represents Data Center 1.
 
     public TimeStamp(int clock, int dataCenterID) {
         lamportClock = clock;
