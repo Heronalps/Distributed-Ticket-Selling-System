@@ -29,7 +29,7 @@ public class Client {
     }
 
     // Create a socket and send ClientRequest to corresponding DataCenter
-    public void startSocketClient(int numOfTicket) throws IOException, ClassNotFoundException{
+    public void startSocketClient(int numOfTicket) throws IOException, ClassNotFoundException, InterruptedException{
         //Find the corresponding DataCenter's port
         System.out.println("Creating New Client...");
 
@@ -46,7 +46,7 @@ public class Client {
             Socket clientSocket = new Socket(hostname, port);
             ObjectOutputStream outToServer = new ObjectOutputStream(clientSocket.getOutputStream());
             System.out.println("Socket Established at port " + port + " and trying to buy " + numOfTicket + " tickets ...");
-            ClientRequest clientRequest = new ClientRequest(numOfTicket);
+            ClientRequest clientRequest = new ClientRequest(numOfTicket, clientID);
             //Send to Socket server
             outToServer.writeObject(clientRequest);
 
@@ -59,6 +59,7 @@ public class Client {
             //Receive ReplyToClient message from Data Center
             System.out.println("A Socket Server established and listening to Data Center's Reply ...");
 
+            Thread.sleep(2000);
             Object reply = inFromDataCenter.readObject();
             displayResult((ReplyToClient) reply);
         }
@@ -67,7 +68,7 @@ public class Client {
         }
     }
 
-    public void buy(int numOfTickets) throws IOException, ClassNotFoundException{
+    public void buy(int numOfTickets) throws IOException, ClassNotFoundException, InterruptedException{
         startSocketClient(numOfTickets);
     }
 
@@ -80,7 +81,7 @@ public class Client {
         }
     }
 
-    public static void main(String[] args) throws IOException, ClassNotFoundException{
+    public static void main(String[] args) throws IOException, ClassNotFoundException, InterruptedException{
 
        Client client = new Client();
        int numOfTicket = client.numOfTicketRequested;

@@ -19,7 +19,7 @@ public class TestClient {
         Socket socket2 = new Socket("localhost", 1888);
         ObjectInputStream ois2 = new ObjectInputStream(socket2.getInputStream());
         ObjectOutputStream oos2 = new ObjectOutputStream(socket2.getOutputStream());
-        oos2.writeObject(new ClientRequest(4));
+        oos2.writeObject(new ClientRequest(4, "C0"));
         Object tmp = ois2.readObject();
         System.out.println(((ReplyToClient) tmp).success);
     }

@@ -8,13 +8,15 @@ import java.io.Serializable;
 public class Release extends Message implements Serializable{
     String type;
     int numOfTicketDecreased;
+    String dataCenterID;
 
     public String getType() {
         return this.type;
     }
 
-    public Release(int numOfTicket) {
+    public Release(int numOfTicket, String dataCenterID) {
         numOfTicketDecreased = numOfTicket;
         type = "RELEASE";
+        this.dataCenterID = dataCenterID;
     }
 }

@@ -58,11 +58,11 @@ public class DataCenter {
         replyToDataCenterArray = new ArrayList<>();
     }
 
-    public static void main(String[] args) throws IOException, ClassNotFoundException {
-
-        System.out.println("Creating New DataCenter...");
+    public static void main(String[] args) throws IOException, ClassNotFoundException, InterruptedException {
 
         DataCenter dataCenter = new DataCenter();
+
+        System.out.println("Creating New DataCenter " + dataCenter.dataCenterID + " ...");
 
         dataCenter.startSocketServer();
 
@@ -71,25 +71,29 @@ public class DataCenter {
 
     }
 
-    public void startSocketServer() throws IOException, ClassNotFoundException{
+    public void startSocketServer() throws IOException, ClassNotFoundException, InterruptedException{
         ServerSocket serverSocket = new ServerSocket(this.port);
         System.out.println("Socket Server Established at port " + this.port + " and Listening to Messages ...");
 
         while (true) {
             try (Socket clientSocket = serverSocket.accept();
                  ObjectInputStream inFromClient =
-                         new ObjectInputStream(clientSocket.getInputStream());
-                 ObjectOutputStream outToClient =
-                         new ObjectOutputStream(clientSocket.getOutputStream())
+                         new ObjectInputStream(clientSocket.getInputStream())
             ){
                 System.out.println("A Message Received ...");
+
+                //Delay for 2 second on every message received
+                Thread.sleep(2000);
                 Message msg = (Message) inFromClient.readObject();
 
 
                 if (msg.getType().equals("CLIENTREQUEST")) {
-                    System.out.println("A Client Request Received ... ");
+
                     ClientRequest clientRequest = (ClientRequest) msg;
                     requestTicketNum = clientRequest.numOfTicketRequest;
+                    System.out.println("A Client Request Received from "
+                            + clientRequest.clientID + " to buy " + requestTicketNum + " tickets ... ");
+
                     int id = Integer.valueOf(dataCenterID.substring(1, 2));
 
                     TimeStamp ts = new TimeStamp(this.lamportClock, id);
@@ -102,8 +106,10 @@ public class DataCenter {
 
 
                 } else if (msg.getType().equals("DATACENTERREQUEST")) {
-                    System.out.println("A Data Center Request Received ... ");
+
                     DataCenterRequest dataCenterRequest = (DataCenterRequest) msg;
+                    System.out.println("A Data Center Request Received from "
+                            + dataCenterRequest.dataCenterID + " to buy " + dataCenterRequest.numOfTicket + " ... ");
                     dataCenterRequestHeap.add(dataCenterRequest);
                     setLocalClock(dataCenterRequest.timeStamp.lamportClock);
                     clockIncrement();
@@ -111,8 +117,9 @@ public class DataCenter {
 
 
                 } else if (msg.getType().equals("REPLYTODATACENTER")) {
-                    System.out.println("A Reply to Data Center Received ... ");
+
                     ReplyToDataCenter replyToDataCenter = (ReplyToDataCenter) msg;
+                    System.out.println("A Reply to Data Center Received from " + replyToDataCenter.dataCenterID + " ... ");
                     replyToDataCenterArray.add(replyToDataCenter);
                     clockIncrement();
 
@@ -131,8 +138,10 @@ public class DataCenter {
 
 
                 } else if (msg.getType().equals("RELEASE")) {
-                    System.out.println("A Release Received ... ");
+
                     Release release = (Release) msg;
+                    System.out.println("A Release Received from "
+                            + release.dataCenterID + " with " + release.numOfTicketDecreased + " tickets sold ... ");
                     globalTicketNumber -= release.numOfTicketDecreased;
                     if (!dataCenterRequestHeap.isEmpty()) {
                         dataCenterRequestHeap.poll();
@@ -160,7 +169,7 @@ public class DataCenter {
 
     public synchronized void clockIncrement(){
         this.lamportClock++;
-        System.out.println("Lamport Clock increments ...");
+        System.out.println("Lamport Clock increments to " + this.lamportClock + " ...");
     }
 
     public synchronized void setLocalClock(int messageTimeStamp){
@@ -225,7 +234,7 @@ public class DataCenter {
 
     public void broadcastRelease(int numOfTicketDecreased) throws IOException{
 
-        Release release = new Release(numOfTicketDecreased);
+        Release release = new Release(numOfTicketDecreased, this.dataCenterID);
         int totalNumOfDataCenter = Integer.parseInt(readConfig("Config","TotalNumOfDataCenter"));
         String host = readConfig("Config", "Hostname");
         for (int id = 0; totalNumOfDataCenter != 0; id++, totalNumOfDataCenter--){
