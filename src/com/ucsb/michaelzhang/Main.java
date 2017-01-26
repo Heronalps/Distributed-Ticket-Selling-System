@@ -1,5 +1,8 @@
 package com.ucsb.michaelzhang;
 
+import java.io.BufferedWriter;
+import java.io.File;
+import java.io.FileWriter;
 import java.io.IOException;
 import java.net.ProxySelector;
 import java.util.Scanner;
@@ -26,16 +29,6 @@ public class Main {
     }
     */
 
-    public static void outputProcess(Process process){
-
-        Scanner scan = new Scanner(process.getInputStream());
-
-        while (scan.hasNext()) {
-            System.out.println(scan.next());
-        }
-        scan.close();
-    }
-
     public static void main(String[] args) throws IOException, InterruptedException{
 
         try {
@@ -46,34 +39,45 @@ public class Main {
             Process[] clients = new Process[totalNumOfClient];
             int tmpCT = totalNumOfClient;
 
+            String[] compile = {"bash", "-c", "find . -name \"*.java\" > source.txt; javac @source.txt; cp ConfigOriginal Config"};
+
+            ProcessBuilder compiler = new ProcessBuilder(compile);
+            Process compilerProcess = compiler.start();
+            Thread.sleep(3000);
+            compilerProcess.waitFor();
+
+
             while(totalNumOfDataCenter != 0) {
-                System.out.println("Creating Process for Data Center D" + (tmpDT - totalNumOfDataCenter) + " ...");
+                int processID = tmpDT - totalNumOfDataCenter;
+                System.out.println("Creating Process for Data Center D" + (processID) + " ...");
                 String[] command = {"bash", "-c", "java -cp ./src com.ucsb.michaelzhang.DataCenter"};
 
                 ProcessBuilder processBuilder = new ProcessBuilder(command);
-                //processBuilder.directory(new File(workingDirectory));
+                dataCenters[processID] = processBuilder.start();
+                Thread.sleep(3000);
 
-                dataCenters[tmpDT - totalNumOfDataCenter] = processBuilder.start();
-                System.out.println("Data Center D" + (tmpDT - totalNumOfDataCenter) + " is running ...");
-
+                System.out.println("Data Center D" + (processID) + " is running ...");
+                PrintMessage printMessage = new PrintMessage(dataCenters[processID]);
+                printMessage.start();
+                Thread.sleep(3000);
                 totalNumOfDataCenter--;
             }
 
             while(totalNumOfClient != 0) {
-                System.out.println("Creating Process for Client C" + (tmpCT - totalNumOfClient) + " ...");
+                int clientID = tmpCT - totalNumOfClient;
+                System.out.println("Creating Process for Client C" + (clientID) + " ...");
                 String[] command = {"bash", "-c", "java -cp ./src com.ucsb.michaelzhang.Client"};
 
                 ProcessBuilder processBuilder = new ProcessBuilder(command);
 
-                clients[tmpCT - totalNumOfClient] = processBuilder.start();
-                System.out.println("Client C" + (tmpCT - totalNumOfClient) + " is running ...");
-
+                clients[clientID] = processBuilder.start();
+                Thread.sleep(3000);
+                System.out.println("Client C" + (clientID) + " is running ...");
+                PrintMessage printMessage = new PrintMessage(clients[clientID]);
+                printMessage.start();
+                Thread.sleep(3000);
                 totalNumOfClient--;
             }
-
-            // Scan every process in the array, and output its feedback
-
-
         }
         catch (IOException ex) {
             ex.printStackTrace();
