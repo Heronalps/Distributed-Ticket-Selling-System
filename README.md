@@ -1,3 +1,3 @@
-# Lamport-Algorithm
+# UCSB Soccer ticket selling system
 *CS271 Distributed System Project 1*
-* UCSB Soccer ticket selling system implementing Lamport's mutual exclusion algorithm
+* A Distributed system implementing Lamport's mutual exclusion algorithm to sell UCSB Soccer ticket
