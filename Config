@@ -2,7 +2,7 @@ TotalNumOfDataCenter=3
 TotalNumOfClient=2
 GlobalTicketNumber=2
 
-NextClientID=C2
+NextClientID=C3
 ClientC0_TICKET=3
 ClientC1_TICKET=4
 

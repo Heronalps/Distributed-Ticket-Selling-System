@@ -1,0 +1,13 @@
+TotalNumOfDataCenter=3
+TotalNumOfClient=2
+GlobalTicketNumber=5
+
+NextClientID=C0
+ClientC0_TICKET=3
+ClientC1_TICKET=4
+
+NextDataCenterID=D0
+Hostname=localhost
+NextDataCenterPort=9190
+NextClientPort=8190
+LamportClock=1
