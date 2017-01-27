@@ -121,7 +121,6 @@ public class DataCenter {
                                 + dataCenterRequest.dataCenterID + " to buy " + dataCenterRequest.numOfTicket + " tickets ... ");
                         dataCenterRequestHeap.add(dataCenterRequest);
                         setLocalClock(dataCenterRequest.timeStamp.lamportClock);
-                        clockIncrement();
                         sendReply(dataCenterRequest.dataCenterID);
 
 
@@ -130,7 +129,7 @@ public class DataCenter {
                         ReplyToDataCenter replyToDataCenter = (ReplyToDataCenter) msg;
                         System.out.println(this.dataCenterID + ": A Reply to Data Center Received from " + replyToDataCenter.dataCenterID + " ... ");
                         replyToDataCenterArray.add(replyToDataCenter);
-                        clockIncrement();
+                        setLocalClock(replyToDataCenter.lamportClock);
 
                         // If received all replies and the first request in the client request queue is also at top of the heap
 
@@ -156,7 +155,7 @@ public class DataCenter {
                         if (!dataCenterRequestHeap.isEmpty()) {
                             dataCenterRequestHeap.poll();
                         }
-                        clockIncrement();
+                        setLocalClock(release.lamportClock);
 
                         // If received all replies and the first request in the client request queue is also at top of the heap
 
@@ -189,6 +188,7 @@ public class DataCenter {
 
     public synchronized void setLocalClock(int messageTimeStamp){
         this.lamportClock = Math.max(this.lamportClock, messageTimeStamp) + 1;
+        System.out.println(this.dataCenterID + ": Lamport Clock gets update to " + this.lamportClock + " ...");
     }
 
     //Broadcast request to all existing data centers
@@ -216,7 +216,7 @@ public class DataCenter {
 
     //Send Reply to data center which sent requests
     public void sendReply(String dataCenterID) throws IOException{
-        ReplyToDataCenter reply = new ReplyToDataCenter(this.dataCenterID);
+        ReplyToDataCenter reply = new ReplyToDataCenter(this.dataCenterID, this.lamportClock);
         int port = Integer.parseInt(readConfig("Config", "DataCenter" + dataCenterID + "_PORT"));
         String host = readConfig("Config", "Hostname");
         Socket socket = new Socket(host, port);
@@ -255,7 +255,7 @@ public class DataCenter {
 
     public void broadcastRelease(int numOfTicketDecreased) throws IOException{
 
-        Release release = new Release(numOfTicketDecreased, this.dataCenterID);
+        Release release = new Release(numOfTicketDecreased, this.dataCenterID, this.lamportClock);
         int totalNumOfDataCenter = Integer.parseInt(readConfig("Config","TotalNumOfDataCenter"));
         String host = readConfig("Config", "Hostname");
         for (int id = 0; totalNumOfDataCenter != 0; id++, totalNumOfDataCenter--){
