@@ -1,33 +1,11 @@
 package com.ucsb.michaelzhang;
 
-import java.io.BufferedWriter;
-import java.io.File;
-import java.io.FileWriter;
-import java.io.IOException;
+import java.io.*;
 import java.net.ProxySelector;
 import java.util.Scanner;
 import static com.ucsb.michaelzhang.Config.*;
 
 public class Main {
-
-    /*public static String getWorkingDirectory() throws IOException {
-        BufferedReader pwd = null;
-        try {
-            Process readPWD = Runtime.getRuntime().exec("pwd");
-            pwd = new BufferedReader(new
-                    InputStreamReader(readPWD.getInputStream()));
-            String workingDirectory = pwd.readLine();
-            return workingDirectory;
-        }
-        catch (IOException ex){
-            ex.printStackTrace();
-        }
-        finally {
-            pwd.close();
-        }
-        return null;
-    }
-    */
 
     public static void main(String[] args) throws IOException, InterruptedException{
 
@@ -39,11 +17,10 @@ public class Main {
             Process[] clients = new Process[totalNumOfClient];
             int tmpCT = totalNumOfClient;
 
-            String[] compile = {"bash", "-c", "find . -name \"*.java\" > source.txt; javac @source.txt; cp ConfigOriginal Config"};
+            String[] compile = {"bash", "-c", "find . -name \"*.java\" > source.txt; javac @source.txt; cp ConfigOriginal Config; rm Log_*"};
 
             ProcessBuilder compiler = new ProcessBuilder(compile);
             Process compilerProcess = compiler.start();
-            Thread.sleep(3000);
             compilerProcess.waitFor();
 
 
@@ -54,12 +31,14 @@ public class Main {
 
                 ProcessBuilder processBuilder = new ProcessBuilder(command);
                 dataCenters[processID] = processBuilder.start();
-                Thread.sleep(3000);
+                Thread.sleep(1000);
 
-                System.out.println("Data Center D" + (processID) + " is running ...");
                 PrintMessage printMessage = new PrintMessage(dataCenters[processID]);
                 printMessage.start();
-                Thread.sleep(3000);
+                Thread.sleep(1000);
+
+                System.out.println("Data Center D" + (processID) + " is running ...");
+                Thread.sleep(1000);
                 totalNumOfDataCenter--;
             }
 
@@ -69,15 +48,24 @@ public class Main {
                 String[] command = {"bash", "-c", "java -cp ./src com.ucsb.michaelzhang.Client"};
 
                 ProcessBuilder processBuilder = new ProcessBuilder(command);
-
                 clients[clientID] = processBuilder.start();
-                Thread.sleep(3000);
-                System.out.println("Client C" + (clientID) + " is running ...");
+                Thread.sleep(1000);
+
                 PrintMessage printMessage = new PrintMessage(clients[clientID]);
                 printMessage.start();
-                Thread.sleep(3000);
+                Thread.sleep(1000);
+
+                System.out.println("Client C" + (clientID) + " is running ...");
+                Thread.sleep(1000);
                 totalNumOfClient--;
+
             }
+
+            Thread.sleep(60 * 1000);
+
+            System.out.println("Mission Complete! Closing Main Process ...");
+
+            System.exit(0);
         }
         catch (IOException ex) {
             ex.printStackTrace();

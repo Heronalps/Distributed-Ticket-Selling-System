@@ -1,6 +1,6 @@
 package com.ucsb.michaelzhang;
 
-import java.io.IOException;
+import java.io.*;
 import java.util.Scanner;
 
 /**
@@ -12,12 +12,13 @@ public class PrintMessage extends Thread{
     public PrintMessage(Process process){
         this.process = process;
     }
-     public void run(){
-         Scanner scan = new Scanner(process.getInputStream()).useDelimiter("\\n");
 
-         while (scan.hasNext()) {
-             System.out.println(scan.next());
-         }
-         scan.close();
+    @Override
+     public void run() {
+        Scanner scan = new Scanner(process.getInputStream()).useDelimiter("\\n");
+        while(scan.hasNext()) {
+            System.out.println(scan.next());
+        }
+        scan.close();
      }
 }

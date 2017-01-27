@@ -1,6 +1,7 @@
 package com.ucsb.michaelzhang;
 
 import java.io.*;
+import java.net.InetSocketAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.util.ArrayList;
@@ -43,15 +44,15 @@ public class DataCenter {
         this.globalTicketNumber = Integer.parseInt(readConfig("Config", "GlobalTicketNumber"));
         this.lamportClock = Integer.parseInt(readConfig("Config", "LamportClock"));;
         this.hostname = readConfig("Config","Hostname");
-        this.port = Integer.parseInt(readConfig("Config", "NextPort"));
+        this.port = Integer.parseInt(readConfig("Config", "NextDataCenterPort"));
         this.totalNumOfDataCenter = Integer.parseInt(readConfig("Config", "TotalNumOfDataCenter"));
         this.logFile = "Log_" + dataCenterID;
 
         // Update NextDataCenterID and add Datacenter Port
-        String next = "D" + (Integer.valueOf(this.dataCenterID.substring(1,2)) + 1);
+        String next = "D" + (Integer.valueOf(this.dataCenterID.substring(1)) + 1);
         changeProperty("Config", "NextDataCenterID", next);
         changeProperty("Config", "DataCenter" + this.dataCenterID + "_PORT", String.valueOf(this.port));
-        changeProperty("Config", "NextPort", String.valueOf(this.port + 1));
+        changeProperty("Config", "NextDataCenterPort", String.valueOf(this.port + 1));
 
 
         dataCenterRequestHeap = new PriorityQueue<>(10, new DataCenterRequest());
@@ -67,23 +68,27 @@ public class DataCenter {
 
         dataCenter.startSocketServer();
 
+        System.exit(0);
+
         // For now, one datacenter can only serve one client. Will implement multiple clients if time permits.
     }
 
     public void startSocketServer() throws IOException, ClassNotFoundException, InterruptedException{
 
-        //logMessage(logFile);
+        logMessage(logFile);
         System.out.println(this.dataCenterID + ": Socket Server Established at port " + this.port + " and Listening to Messages ...");
         System.out.println(this.dataCenterID + ": There are " + globalTicketNumber + " tickets left in the pool ...");
-        try(
-                ServerSocket serverSocket = new ServerSocket(this.port);
-                ){
-            while (true) {
-                try (
-                        Socket clientSocket = serverSocket.accept();
-                        ObjectInputStream inFromClient =
-                                new ObjectInputStream(clientSocket.getInputStream())
-                ) {
+        ServerSocket serverSocket = new ServerSocket();
+        serverSocket.setReuseAddress(true);
+        serverSocket.bind(new InetSocketAddress(this.port));
+        try{
+            long start = System.currentTimeMillis();
+            long end = start + 3 * 60 * 1000; // Process will be closed after certain time
+            while (System.currentTimeMillis() < end) {
+                Socket clientSocket = serverSocket.accept();
+                ObjectInputStream inFromClient =
+                        new ObjectInputStream(clientSocket.getInputStream());
+                try {
                     System.out.println(this.dataCenterID + ": A Message Received ...");
 
                     //Delay for 2 second on every message received
@@ -98,7 +103,7 @@ public class DataCenter {
                         System.out.println(this.dataCenterID + ": A Client Request Received from "
                                 + clientRequest.clientID + " to buy " + requestTicketNum + " tickets ... ");
 
-                        int id = Integer.valueOf(dataCenterID.substring(1, 2));
+                        int id = Integer.valueOf(dataCenterID.substring(1));
 
                         TimeStamp ts = new TimeStamp(this.lamportClock, id);
                         DataCenterRequest dataCenterRequest =
@@ -166,10 +171,13 @@ public class DataCenter {
                     }
                 } catch (IOException ex) {
                     ex.printStackTrace();
+                } finally {
+                    inFromClient.close();
+                    clientSocket.close();
                 }
             }
-        } catch (IOException ex){
-            ex.printStackTrace();
+        } finally {
+            serverSocket.close();
         }
     }
 
@@ -189,17 +197,19 @@ public class DataCenter {
         int totalNumOfDataCenter = Integer.parseInt(readConfig("Config","TotalNumOfDataCenter"));
         String host = readConfig("Config", "Hostname");
 
-        for (int id = 0; totalNumOfDataCenter != 0; id++, totalNumOfDataCenter--){
-            try {
-                int port = Integer.parseInt(readConfig("Config", "DataCenterD" + id + "_PORT"));
-                if (port != this.port) {
-                    Socket socket = new Socket(host, port);
-                    ObjectOutputStream outToServer = new ObjectOutputStream(socket.getOutputStream());
+        for (int id = 0; totalNumOfDataCenter != 0; id++, totalNumOfDataCenter--) {
+            int port = Integer.parseInt(readConfig("Config", "DataCenterD" + id + "_PORT"));
+            if (port != this.port) {
+                Socket socket = new Socket(host, port);
+                ObjectOutputStream outToServer = new ObjectOutputStream(socket.getOutputStream());
+                try {
                     outToServer.writeObject(dataCenterRequest);
                     System.out.println(this.dataCenterID + ": Broadcasting Data Center Request to Data Center at port " + port + " ...");
+                } catch(IOException ex){
+                    ex.printStackTrace();
+                } finally {
+                    socket.close();
                 }
-            } catch (IOException ex) {
-                ex.printStackTrace();
             }
         }
     }
@@ -251,14 +261,17 @@ public class DataCenter {
         for (int id = 0; totalNumOfDataCenter != 0; id++, totalNumOfDataCenter--){
             int port = Integer.parseInt(readConfig("Config", "DataCenterD" + id + "_PORT"));
             if (port != this.port) {
-                try (
-                        Socket socket = new Socket(host, port);
-                        ObjectOutputStream outToServer = new ObjectOutputStream(socket.getOutputStream());
-                ) {
+                Socket socket = new Socket(host, port);
+                ObjectOutputStream outToServer = new ObjectOutputStream(socket.getOutputStream());
+                try {
                     outToServer.writeObject(release);
                     System.out.println(this.dataCenterID + ": Broadcasting Releases to Data Center D" + id + " ...");
+
                 } catch (IOException ex) {
                     ex.printStackTrace();
+                } finally {
+                    outToServer.close();
+                    socket.close();
                 }
             }
         }
@@ -267,19 +280,20 @@ public class DataCenter {
     public void replyClient(boolean success, String dataCenterID) throws IOException{
         ReplyToClient reply = new ReplyToClient(success);
         //Send reply to corresponding client. For now, I assume the ID of client and datacenter are same. May be modified later.
-        int port = Integer.parseInt(readConfig("Config", "ClientC" + dataCenterID.substring(1, 2) + "_PORT"));
+        int port = Integer.parseInt(readConfig("Config", "ClientC" + dataCenterID.substring(1) + "_PORT"));
         String hostname = readConfig("Config", "Hostname");
-
-        try (
-                Socket socket = new Socket(hostname, port);
-             ObjectOutputStream outToClient = new ObjectOutputStream(socket.getOutputStream());
-
-        ){
+        Socket socket = new Socket(hostname, port);
+        ObjectOutputStream outToClient = new ObjectOutputStream(socket.getOutputStream());
+        try {
             outToClient.writeObject(reply);
             outToClient.flush();
-            System.out.println(this.dataCenterID + ": Replying to Client C" + dataCenterID.substring(1, 2) + " ...");
+            System.out.println(this.dataCenterID + ": Replying to Client C" + dataCenterID.substring(1) + " ...");
+
         } catch (IOException ex){
             ex.printStackTrace();
+        } finally {
+            outToClient.close();
+            socket.close();
         }
 
     }
